@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小仓鼠收集坚果</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 游戏对象
+        const hamster = {
+            x: 50,
+            y: 200,
+            width: 40,
+            height: 40,
+            speed: 8,
+            jumpStrength: 15,
+            xVelocity: 0,
+            yVelocity: 0,
+            score: 0
+        };
+
+        // 轨迹数组
+        const trail = [];
+        const trailDuration = 3000; // 3秒
+        const trailInterval = 50; // 每50毫秒记录一个位置
+
+        const platforms = [
+            {x: 0, y: 350, width: 800, height: 50},
+            {x: 200, y: 250, width: 100, height: 20},
+            {x: 400, y: 200, width: 100, height: 20},
+            {x: 600, y: 150, width: 100, height: 20}
+        ];
+
+        const nuts = [
+            {x: 250, y: 230, width: 30, height: 30, type: 'acorn', value: 1},
+            {x: 450, y: 180, width: 30, height: 30, type: 'walnut', value: 2},
+            {x: 650, y: 130, width: 30, height: 30, type: 'almond', value: 3}
+        ];
+
+        const targetScore = 10;
+
+        // 游戏循环
+        let lastTime = 0;
+        let trailTimer = 0;
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            handleInput();
+            update(deltaTime);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 更新游戏状态
+        function update(deltaTime) {
+            // 应用水平速度
+            hamster.x += hamster.xVelocity;
+
+            // 重力
+            hamster.yVelocity += 0.5;
+            hamster.y += hamster.yVelocity;
+
+            // 平台碰撞检测
+            for (let platform of platforms) {
+                if (hamster.y + hamster.height > platform.y &&
+                    hamster.y < platform.y + platform.height &&
+                    hamster.x + hamster.width > platform.x &&
+                    hamster.x < platform.x + platform.width) {
+                    hamster.y = platform.y - hamster.height;
+                    hamster.yVelocity = 0;
+                }
+            }
+
+            // 坚果碰撞检测
+            for (let i = nuts.length - 1; i >= 0; i--) {
+                if (hamster.x < nuts[i].x + nuts[i].width &&
+                    hamster.x + hamster.width > nuts[i].x &&
+                    hamster.y < nuts[i].y + nuts[i].height &&
+                    hamster.y + hamster.height > nuts[i].y) {
+                    hamster.score += nuts[i].value;
+                    nuts.splice(i, 1);
+                }
+            }
+
+            // 检查是否达到目标分数
+            if (hamster.score >= targetScore) {
+                alert('恭喜你达到目标分数！');
+                // 这里可以添加游戏结束或下一关的逻辑
+            }
+
+            // 边界检查
+            if (hamster.x < 0) hamster.x = 0;
+            if (hamster.x + hamster.width > canvas.width) hamster.x = canvas.width - hamster.width;
+
+            // 更新轨迹
+            trailTimer += deltaTime;
+            if (trailTimer >= trailInterval) {
+                trail.push({x: hamster.x + hamster.width/2, y: hamster.y + hamster.height/2, time: Date.now()});
+                trailTimer = 0;
+            }
+
+            // 移除过期的轨迹点
+            const now = Date.now();
+            while (trail.length > 0 && now - trail[0].time > trailDuration) {
+                trail.shift();
+            }
+        }
+
+        // 绘制游戏画面
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制轨迹
+            ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            for (let i = 0; i < trail.length; i++) {
+                if (i === 0) {
+                    ctx.moveTo(trail[i].x, trail[i].y);
+                } else {
+                    ctx.lineTo(trail[i].x, trail[i].y);
+                }
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 绘制仓鼠
+            ctx.fillStyle = 'brown';
+            ctx.beginPath();
+            ctx.ellipse(hamster.x + hamster.width/2, hamster.y + hamster.height/2, 
+                        hamster.width/2, hamster.height/2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            // 绘制耳朵
+            ctx.beginPath();
+            ctx.ellipse(hamster.x + 10, hamster.y + 5, 5, 8, 0, 0, 2 * Math.PI);
+            ctx.ellipse(hamster.x + hamster.width - 10, hamster.y + 5, 5, 8, 0, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // 绘制平台
+            ctx.fillStyle = 'green';
+            for (let platform of platforms) {
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            }
+
+            // 绘制坚果
+            for (let nut of nuts) {
+                switch(nut.type) {
+                    case 'acorn':
+                        ctx.fillStyle = 'brown';
+                        break;
+                    case 'walnut':
+                        ctx.fillStyle = 'saddlebrown';
+                        break;
+                    case 'almond':
+                        ctx.fillStyle = 'burlywood';
+                        break;
+                }
+                ctx.beginPath();
+                ctx.ellipse(nut.x + nut.width/2, nut.y + nut.height/2, 
+                            nut.width/2, nut.height/2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // 绘制坚果分值
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(nut.value, nut.x + nut.width/2, nut.y - 5);
+            }
+
+            // 绘制分数和目标分数
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`得分: ${hamster.score} / ${targetScore}`, 10, 30);
+        }
+
+        // 键盘控制
+        const keys = {};
+
+        document.addEventListener('keydown', (event) => {
+            keys[event.key] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+        });
+
+        function handleInput() {
+            hamster.xVelocity = 0;
+            if (keys['ArrowLeft']) {
+                hamster.xVelocity = -hamster.speed;
+            }
+            if (keys['ArrowRight']) {
+                hamster.xVelocity = hamster.speed;
+            }
+            if (keys['ArrowUp'] && hamster.yVelocity === 0) {
+                hamster.yVelocity = -hamster.jumpStrength;
+            }
+        }
+
+        // 开始游戏
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

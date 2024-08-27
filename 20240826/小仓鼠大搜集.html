@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小仓鼠大搜集</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        #score {
+            font-size: 24px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="score">坚果数量: 0</div>
+    <script>
+        // 获取canvas元素
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 小仓鼠对象
+        const hamster = {
+            x: 50,
+            y: 550,
+            width: 40,
+            height: 40,
+            color: '#A9A9A9', // 灰色
+            speed: 8, // 增加移动速度
+            jumpStrength: 15,
+            yVelocity: 0,
+            isJumping: false,
+            gravity: 0.8,
+            maxJumps: 2, // 最大跳跃次数
+            jumpsLeft: 2, // 剩余跳跃次数
+            score: 0,
+            xVelocity: 0
+        };
+
+        // 坚果类型
+        const nutTypes = [
+            { color: '#F0E68C', points: 1, shape: 'triangle' },  // 淡黄色三角形
+            { color: '#8B4513', points: 2, shape: 'circle' },    // 棕色圆形
+            { color: '#000000', points: 3, shape: 'ellipse' },   // 黑色椭圆形
+            { color: '#D2691E', points: 4, shape: 'trapezoid' }, // 巧克力色梯形
+            { color: '#CD853F', points: 5, shape: 'diamond' }    // 秘鲁色菱形
+        ];
+
+        // 坚果数组
+        let nuts = [];
+
+        // 平台数组
+        let platforms = [];
+
+        // 添加音频上下文和音符数组
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [
+            261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, // C4 到 C5
+            587.33, 659.25, 698.46, 783.99, 880.00, 987.77, 1046.50 // D5 到 C6
+        ];
+
+        function playSound(frequency, duration = 0.5, type = 'sine') {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playRandomJumpSound() {
+            const randomNote = notes[Math.floor(Math.random() * notes.length)];
+            playSound(randomNote);
+        }
+
+        function playFallSound() {
+            playSound(notes[0] / 2, 0.3); // 播放比最低音还要低一个八度的音
+        }
+
+        function playCollectSound() {
+            // 播放一个简单的和弦
+            playSound(notes[0]); // 根音
+            setTimeout(() => playSound(notes[4], 0.3), 50); // 三度
+            setTimeout(() => playSound(notes[7], 0.3), 100); // 五度
+        }
+
+        // 绘制小仓鼠
+        function drawHamster() {
+            // 身体
+            ctx.fillStyle = hamster.color;
+            ctx.fillRect(hamster.x, hamster.y, hamster.width, hamster.height);
+
+            // 眼睛
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(hamster.x + 10, hamster.y + 15, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 耳朵
+            ctx.fillStyle = hamster.color;
+            ctx.beginPath();
+            ctx.arc(hamster.x - 5, hamster.y - 5, 10, 0, Math.PI * 2);
+            ctx.arc(hamster.x + hamster.width + 5, hamster.y - 5, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 绘制坚果
+        function drawNut(nut) {
+            ctx.fillStyle = nut.color;
+            ctx.beginPath();
+            switch(nut.shape) {
+                case 'triangle':
+                    ctx.moveTo(nut.x, nut.y + nut.height);
+                    ctx.lineTo(nut.x + nut.width / 2, nut.y);
+                    ctx.lineTo(nut.x + nut.width, nut.y + nut.height);
+                    break;
+                case 'circle':
+                    ctx.arc(nut.x + nut.width / 2, nut.y + nut.height / 2, nut.width / 2, 0, Math.PI * 2);
+                    break;
+                case 'ellipse':
+                    ctx.ellipse(nut.x + nut.width / 2, nut.y + nut.height / 2, nut.width / 2, nut.height / 3, 0, 0, Math.PI * 2);
+                    break;
+                case 'trapezoid':
+                    ctx.moveTo(nut.x + nut.width * 0.2, nut.y + nut.height);
+                    ctx.lineTo(nut.x, nut.y);
+                    ctx.lineTo(nut.x + nut.width, nut.y);
+                    ctx.lineTo(nut.x + nut.width * 0.8, nut.y + nut.height);
+                    break;
+                case 'diamond':
+                    ctx.moveTo(nut.x + nut.width / 2, nut.y);
+                    ctx.lineTo(nut.x + nut.width, nut.y + nut.height / 2);
+                    ctx.lineTo(nut.x + nut.width / 2, nut.y + nut.height);
+                    ctx.lineTo(nut.x, nut.y + nut.height / 2);
+                    break;
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // 游戏循环
+        function gameLoop() {
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawHamster();
+
+            // 绘制坚果
+            nuts.forEach(drawNut);
+
+            // 绘制平台
+            platforms.forEach(platform => {
+                ctx.fillStyle = platform.isMoving ? '#FF69B4' : '#4CAF50'; // 移动平台用不同颜色
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            });
+
+            // 更新游戏状态
+            updateGame();
+
+            // 继续下一帧
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 更新游戏状态
+        function updateGame() {
+            // 应用重力和水平速度
+            hamster.yVelocity += hamster.gravity;
+            hamster.y += hamster.yVelocity;
+            hamster.x += hamster.xVelocity;
+
+            updatePlatforms();
+
+            let onPlatform = false;
+
+            // 平台碰撞检测
+            platforms.forEach(platform => {
+                if (hamster.y + hamster.height > platform.y &&
+                    hamster.y < platform.y + platform.height &&
+                    hamster.x + hamster.width > platform.x &&
+                    hamster.x < platform.x + platform.width) {
+                    hamster.y = platform.y - hamster.height;
+                    hamster.yVelocity = 0;
+                    hamster.jumpsLeft = hamster.maxJumps;
+                    onPlatform = true;
+                    
+                    // 如果是移动平台，让小仓鼠跟随平台移动
+                    if (platform.isMoving) {
+                        hamster.x += platform.speed;
+                    }
+                }
+            });
+
+            // 检测小仓鼠是否掉落
+            if (hamster.y + hamster.height > canvas.height) {
+                hamster.y = canvas.height - hamster.height;
+                hamster.yVelocity = 0;
+                hamster.jumpsLeft = hamster.maxJumps;
+                playFallSound();
+            }
+
+            // 坚果碰撞检测
+            for (let i = nuts.length - 1; i >= 0; i--) {
+                if (hamster.x < nuts[i].x + nuts[i].width &&
+                    hamster.x + hamster.width > nuts[i].x &&
+                    hamster.y < nuts[i].y + nuts[i].height &&
+                    hamster.y + hamster.height > nuts[i].y) {
+                    // 收集坚果
+                    hamster.score += nuts[i].points;
+                    updateScoreDisplay();
+                    nuts.splice(i, 1);
+                    // 生成新的坚果
+                    nuts.push(generateNut());
+                    playCollectSound();
+                }
+            }
+
+            if (!onPlatform && hamster.jumpsLeft === hamster.maxJumps) {
+                hamster.jumpsLeft--;
+            }
+
+            // 减少水平速度（模拟摩擦）
+            hamster.xVelocity *= 0.9;
+        }
+
+        // 更新分数显示
+        function updateScoreDisplay() {
+            document.getElementById('score').textContent = `坚果数量: ${hamster.score}`;
+        }
+
+        // 初始化游戏
+        function initGame() {
+            generatePlatforms();
+            for (let i = 0; i < platforms.length; i++) {
+                nuts.push(generateNut());
+            }
+        }
+
+        function generatePlatforms() {
+            platforms = [{ x: 0, y: 580, width: 800, height: 20, isMoving: false }]; // 底部平台
+            const platformCount = Math.floor(Math.random() * 6) + 5; // 5到10之间随机
+
+            for (let i = 1; i < platformCount; i++) {
+                platforms.push({
+                    x: Math.random() * (canvas.width - 100),
+                    y: Math.random() * (canvas.height - 100),
+                    width: Math.random() * 100 + 50,
+                    height: 20,
+                    isMoving: Math.random() < 0.5, // 50%的概率是移动平台
+                    speed: (Math.random() - 0.5) * 4, // -2到2之间的随机速度
+                    minX: 0,
+                    maxX: canvas.width
+                });
+            }
+        }
+
+        function updatePlatforms() {
+            platforms.forEach(platform => {
+                if (platform.isMoving) {
+                    platform.x += platform.speed;
+                    
+                    // 碰到边界就反向
+                    if (platform.x <= platform.minX || platform.x + platform.width >= platform.maxX) {
+                        platform.speed *= -1;
+                    }
+                }
+            });
+        }
+
+        function generateNut() {
+            const nutType = nutTypes[Math.floor(Math.random() * nutTypes.length)];
+            return {
+                x: Math.random() * (canvas.width - 20),
+                y: Math.random() * (canvas.height - 20),
+                width: 20,
+                height: 20,
+                color: nutType.color,
+                points: nutType.points,
+                shape: nutType.shape
+            };
+        }
+
+        // 开始游戏
+        initGame();
+        gameLoop();
+
+        // 添加键盘事件监听
+        document.addEventListener('keydown', (event) => {
+            switch(event.key) {
+                case 'ArrowLeft':
+                    hamster.xVelocity = -hamster.speed;
+                    break;
+                case 'ArrowRight':
+                    hamster.xVelocity = hamster.speed;
+                    break;
+                case 'ArrowUp':
+                case ' ':
+                    if (hamster.jumpsLeft > 0) {
+                        hamster.yVelocity = -hamster.jumpStrength;
+                        hamster.jumpsLeft--;
+                        // 在跳跃时保持一定的水平速度
+                        if (Math.abs(hamster.xVelocity) < 1) {
+                            hamster.xVelocity = hamster.facing === 'right' ? 3 : -3;
+                        }
+                        playRandomJumpSound();
+                    }
+                    break;
+            }
+        });
+
+        // 添加键盘松开事件
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                hamster.xVelocity = 0;
+            }
+        });
+    </script>
+</body>
+</html>

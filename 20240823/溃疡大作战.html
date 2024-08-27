@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>口腔溃疡治疗游戏</title>
+    <style>
+        #gameArea {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: 20px;
+        }
+        #treatments {
+            display: flex;
+            flex-direction: column;
+        }
+        .treatment {
+            margin: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .treatment canvas {
+            margin-right: 10px;
+        }
+        #mathProcess {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <h1>口腔溃疡治疗游戏</h1>
+    <div id="gameArea">
+        <canvas id="ulcer" width="300" height="300"></canvas>
+        <div id="treatments"></div>
+    </div>
+    <p id="message"></p>
+    <div id="mathProcess"></div>
+
+    <script>
+        const ulcerCanvas = document.getElementById('ulcer');
+        const ctx = ulcerCanvas.getContext('2d');
+        const message = document.getElementById('message');
+        const treatmentsDiv = document.getElementById('treatments');
+        const mathProcess = document.getElementById('mathProcess');
+
+        let ulcerSize = 150;
+        let ulcerHealth = Math.floor(Math.random() * 21) + 10; // 10 to 30
+        let healedAreas = [];
+        let bacteria = [];
+        const bacteriaCount = 5;
+
+        const treatments = [
+            { name: '消毒喷雾', action: 'spray', color: 'cyan', shape: 'circle' },
+            { name: '药膏A', action: 'heal', healing: 1, color: 'blue', shape: 'circle' },
+            { name: '药膏B', action: 'heal', healing: 3, color: 'green', shape: 'square' },
+            { name: '药膏C', action: 'heal', healing: 5, color: 'yellow', shape: 'triangle' }
+        ];
+
+        function drawOintment(canvas, shape, color) {
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            switch(shape) {
+                case 'circle':
+                    ctx.beginPath();
+                    ctx.arc(15, 15, 15, 0, 2 * Math.PI);
+                    ctx.fill();
+                    break;
+                case 'square':
+                    ctx.fillRect(0, 0, 30, 30);
+                    break;
+                case 'triangle':
+                    ctx.beginPath();
+                    ctx.moveTo(15, 0);
+                    ctx.lineTo(30, 30);
+                    ctx.lineTo(0, 30);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+            }
+        }
+
+        function initializeBacteria() {
+            for (let i = 0; i < bacteriaCount; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = Math.random() * (ulcerSize / 2 - 5);
+                bacteria.push({
+                    x: 150 + radius * Math.cos(angle),
+                    y: 150 + radius * Math.sin(angle)
+                });
+            }
+        }
+
+        function drawBacteria() {
+            bacteria.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = 'green';
+                ctx.fill();
+            });
+        }
+
+        function drawMouth() {
+            // 绘制口腔背景
+            ctx.fillStyle = '#FFA07A';  // 浅珊瑚色
+            ctx.fillRect(0, 0, ulcerCanvas.width, ulcerCanvas.height);
+
+            // 绘制牙齿
+            ctx.fillStyle = 'white';
+            const teethCount = 8;
+            const teethWidth = ulcerCanvas.width / teethCount;
+            const teethHeight = 50;
+
+            // 上排牙齿
+            for (let i = 0; i < teethCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * teethWidth, 0);
+                ctx.lineTo((i + 1) * teethWidth, 0);
+                ctx.lineTo((i + 0.5) * teethWidth, teethHeight);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // 下排牙齿
+            for (let i = 0; i < teethCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * teethWidth, ulcerCanvas.height);
+                ctx.lineTo((i + 1) * teethWidth, ulcerCanvas.height);
+                ctx.lineTo((i + 0.5) * teethWidth, ulcerCanvas.height - teethHeight);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function drawUlcer() {
+            ctx.clearRect(0, 0, ulcerCanvas.width, ulcerCanvas.height);
+            
+            // 先绘制口腔背景
+            drawMouth();
+
+            // 绘制溃疡
+            ctx.beginPath();
+            ctx.arc(150, 150, ulcerSize / 2, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+
+            healedAreas.forEach(area => {
+                ctx.beginPath();
+                ctx.arc(150, 150, area.size / 2, 0, 2 * Math.PI);
+                ctx.fillStyle = area.color;
+                ctx.fill();
+            });
+
+            drawBacteria();
+
+            // Draw ulcer health
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText(ulcerHealth, 150, 155);
+        }
+
+        function applyTreatment(treatment) {
+            if (treatment.action === 'spray') {
+                if (bacteria.length > 0) {
+                    bacteria.pop();
+                    message.textContent = `喷雾杀死了一个病菌！还剩${bacteria.length}个病菌。`;
+                } else {
+                    message.textContent = "所有病菌已被清除，现在可以使用药膏了！";
+                }
+            } else if (treatment.action === 'heal') {
+                if (bacteria.length > 0) {
+                    message.textContent = "请先使用喷雾清除所有病菌！";
+                    return;
+                }
+                if (ulcerHealth <= 0) return;
+
+                const healingAmount = Math.min(treatment.healing, ulcerHealth);
+                healedAreas.unshift({ size: ulcerSize * (healingAmount / ulcerHealth), color: treatment.color });
+                ulcerHealth -= healingAmount;
+
+                updateMathProcess(healingAmount);
+
+                if (ulcerHealth <= 0) {
+                    ulcerHealth = 0;
+                    message.textContent = "恭喜!溃疡已经痊愈了!";
+                } else {
+                    message.textContent = `溃疡变小了!现在的生命值是${ulcerHealth}`;
+                }
+            }
+            drawUlcer();
+        }
+
+        function updateMathProcess(healingAmount) {
+            const currentProcess = mathProcess.textContent;
+            if (currentProcess) {
+                mathProcess.textContent = `${currentProcess} - ${healingAmount} = ${ulcerHealth}`;
+            } else {
+                mathProcess.textContent = `${ulcerHealth + healingAmount} - ${healingAmount} = ${ulcerHealth}`;
+            }
+        }
+
+        treatments.forEach(treatment => {
+            const button = document.createElement('button');
+            button.className = 'treatment';
+            const treatmentCanvas = document.createElement('canvas');
+            treatmentCanvas.width = 30;
+            treatmentCanvas.height = 30;
+            drawOintment(treatmentCanvas, treatment.shape, treatment.color);
+            button.appendChild(treatmentCanvas);
+            button.appendChild(document.createTextNode(`${treatment.name}${treatment.healing ? ` (${treatment.healing})` : ''}`));
+            button.addEventListener('click', () => applyTreatment(treatment));
+            treatmentsDiv.appendChild(button);
+        });
+
+        initializeBacteria();
+        drawUlcer();
+    </script>
+</body>
+</html>
